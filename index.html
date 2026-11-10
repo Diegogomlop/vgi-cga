@@ -247,9 +247,9 @@
   .card-title span { font-size: 16px; }
 
   /* GRID */
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: start; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; align-items: start; }
 
   /* FORM ELEMENTS */
   .field {
@@ -288,7 +288,16 @@
     box-shadow: 0 0 0 3px rgba(26,58,122,0.12);
   }
 
-  textarea { resize: vertical; min-height: 70px; }
+  textarea {
+    resize: none;
+    min-height: 70px;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+    field-sizing: content;
+  }
+  textarea.crece { min-height: 42px; }
 
   /* ESCALAS */
   .scale-table {
@@ -377,6 +386,7 @@
   .interp-leve { background: #fff3cd; color: #856404; }
   .interp-moderado { background: #ffe5d0; color: #9d3a00; }
   .interp-severo { background: #f8d7da; color: var(--rojo); }
+  .interp-neutro { background: #eef1f6; color: #5a6a7e; }
 
   /* CHECKBOXES */
   .checkbox-grid {
@@ -482,15 +492,34 @@
   .badge-yellow { background: #fff3cd; color: #856404; }
   .badge-orange { background: #ffe5d0; color: #9d3a00; }
   .badge-red { background: #f8d7da; color: var(--rojo); }
+  .badge-neutral { background: #e8eef8; color: #5a6a7e; }
 
   /* PRINT */
   @media print {
-    .header { position: static; }
+    .header { position: static; break-inside: avoid; page-break-inside: avoid; }
     .progress-bar-container, .nav-buttons, .header-right { display: none !important; }
-    .section { display: block !important; }
+    .section { display: block !important; break-inside: auto; page-break-inside: auto; }
     .main { max-width: 100%; padding: 10px; }
     body { background: white; }
+    /* La altura la fija el texto. height:auto encoge el cuadro a un renglón. */
+    textarea {
+      overflow: hidden !important;
+      white-space: pre-wrap !important;
+      overflow-wrap: anywhere !important;
+      max-height: none !important;
+      resize: none !important;
+      field-sizing: content !important;
+    }
+    @supports (field-sizing: content) {
+      textarea { height: auto !important; }
+    }
+    .scale-table tr,
+    .score-box,
+    .summary-card,
+    .alert-box { break-inside: avoid; page-break-inside: avoid; }
   }
+
+  body.exportando .header { position: static; }
 
   /* RESPONSIVE */
   @media (max-width: 600px) {
@@ -642,7 +671,7 @@
       </div>
       <div class="field">
         <label>Sexo</label>
-        <select id="sexo">
+        <select id="sexo" onchange="calcularScores()">
           <option value="">Seleccionar</option>
           <option>Masculino</option>
           <option>Femenino</option>
@@ -660,7 +689,7 @@
     <div class="grid-3">
       <div class="field">
         <label>Escolaridad</label>
-        <select id="escolaridad">
+        <select id="escolaridad" onchange="calcularScores()">
           <option value="">Seleccionar</option>
           <option>Analfabeta</option>
           <option>Primaria incompleta</option>
@@ -700,7 +729,7 @@
       </div>
       <div class="field">
         <label>Motivo de consulta / ingreso</label>
-        <input type="text" id="motivo" placeholder="Motivo principal">
+        <textarea id="motivo" class="crece" rows="1" placeholder="Motivo principal"></textarea>
       </div>
     </div>
   </div>
@@ -731,7 +760,7 @@
       </div>
       <div class="field">
         <label>Alergias</label>
-        <input type="text" id="alergias" placeholder="Medicamento / sustancia">
+        <textarea id="alergias" class="crece" rows="1" placeholder="Medicamento / sustancia"></textarea>
       </div>
       <div class="field">
         <label>Hospitalización último año</label>
@@ -760,7 +789,8 @@
       </div>
       <div class="field">
         <label>Perímetro pantorrilla (cm)</label>
-        <input type="number" id="pantorrilla" placeholder="cm">
+        <input type="number" id="pantorrilla" placeholder="cm" step="0.1" oninput="calcularFisico()">
+        <div id="pantorrillaLectura" style="font-size:12px;color:#5a6a7e;margin-top:4px;">No evaluado</div>
       </div>
     </div>
   </div>
@@ -900,9 +930,9 @@
     <div class="score-box">
       <div>
         <div class="score-label">Puntaje Total Barthel</div>
-        <div style="font-size:11px;color:#777;margin-top:2px">100 = Independencia total</div>
+        <div style="font-size:11px;color:#777;margin-top:2px">Shah: 100 independiente · 91-99 leve · 61-90 moderada · 21-60 severa · 0-20 total</div>
       </div>
-      <div class="score-value" id="barthelScore">0</div>
+      <div class="score-value" id="barthelScore">—</div>
       <div class="score-interpretation" id="barthelInterp">—</div>
     </div>
   </div>
@@ -917,7 +947,7 @@
           <td>Uso del teléfono</td>
           <td><div class="radio-group">
             <label class="radio-option" onclick="selectRadio(this,'l1',0)"><input type="radio" name="l1" value="0">Incapaz (0)</label>
-            <label class="radio-option" onclick="selectRadio(this,'l1',0)"><input type="radio" name="l1" value="0">Solo responde (0)</label>
+            <label class="radio-option" onclick="selectRadio(this,'l1',1)"><input type="radio" name="l1" value="1">Solo responde (1)</label>
             <label class="radio-option" onclick="selectRadio(this,'l1',1)"><input type="radio" name="l1" value="1">Marca algunos (1)</label>
             <label class="radio-option" onclick="selectRadio(this,'l1',1)"><input type="radio" name="l1" value="1">Independiente (1)</label>
           </div></td>
@@ -984,7 +1014,7 @@
         <div class="score-label">Puntaje Total Lawton</div>
         <div style="font-size:11px;color:#777;margin-top:2px">8 = Independencia total</div>
       </div>
-      <div class="score-value" id="lawtonScore">0</div>
+      <div class="score-value" id="lawtonScore">—</div>
       <div class="score-interpretation" id="lawtonInterp">—</div>
     </div>
   </div>
@@ -993,16 +1023,19 @@
     <div class="card-title"><span>🚶</span> Velocidad de la Marcha y Equilibrio</div>
     <div class="grid-3">
       <div class="field">
-        <label>Velocidad marcha (m/s) <span class="tooltip">ℹ️<span class="tip-text">Test de 4 metros. Normal ≥ 0.8 m/s en mayores</span></span></label>
-        <input type="number" id="velMarcha" placeholder="ej. 0.9" step="0.1">
+        <label>Velocidad marcha (m/s) <span class="tooltip">ℹ️<span class="tip-text">Test de 4 metros. &gt;1.0 m/s conservada. Más de 0.8 y hasta 1.0 m/s: reducida. ≤0.8 m/s: lenta (bajo desempeño en EWGSOP2).</span></span></label>
+        <input type="number" id="velMarcha" placeholder="ej. 0.9" step="0.1" oninput="calcularFisico()">
+        <div id="marchaLectura" style="font-size:12px;color:#5a6a7e;margin-top:4px;">No evaluado</div>
       </div>
       <div class="field">
-        <label>Timed Up & Go (seg)</label>
-        <input type="number" id="tug" placeholder="segundos" step="0.1">
+        <label>Timed Up & Go (seg) <span class="tooltip">ℹ️<span class="tip-text">≥12 s: más riesgo de caídas (CDC STEADI). &gt;20 s: dependencia marcada.</span></span></label>
+        <input type="number" id="tug" placeholder="segundos" step="0.1" oninput="calcularFisico()">
+        <div id="tugLectura" style="font-size:12px;color:#5a6a7e;margin-top:4px;">No evaluado</div>
       </div>
       <div class="field">
-        <label>Fuerza de prensión (kg)</label>
-        <input type="number" id="prension" placeholder="kg" step="0.5">
+        <label>Fuerza de prensión (kg) <span class="tooltip">ℹ️<span class="tip-text">EWGSOP2: hombres &lt;27 kg, mujeres &lt;16 kg. Hace falta el sexo.</span></span></label>
+        <input type="number" id="prension" placeholder="kg" step="0.5" oninput="calcularFisico()">
+        <div id="prensionLectura" style="font-size:12px;color:#5a6a7e;margin-top:4px;">No evaluado</div>
       </div>
     </div>
     <div class="divider"></div>
@@ -1037,7 +1070,7 @@
     </div>
   </div>
 
-  <div class="alert-box alert-info">ℹ️ Ajuste el punto de corte del MMSE según escolaridad: analfabeta ≥17, primaria ≥21, secundaria o más ≥24.</div>
+  <div class="alert-box alert-info">ℹ️ Corte del MMSE según la escolaridad de esta forma: analfabeta ≥17, primaria (incompleta o completa) ≥21, secundaria o más ≥24. Por debajo de ese número: bajo el corte.</div>
 
   <div class="card">
     <div class="card-title"><span>🔢</span> MMSE – Mini-Mental State Examination</div>
@@ -1045,36 +1078,53 @@
       <thead><tr><th style="width:40%">Área / Pregunta</th><th>Puntaje máximo</th><th style="width:40%">Puntaje obtenido</th></tr></thead>
       <tbody>
         <tr><td><strong>ORIENTACIÓN TEMPORAL</strong><br><small>¿Año, estación, mes, día, fecha?</small></td><td>5</td>
-          <td><input type="number" id="mm1" min="0" max="5" placeholder="0-5" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm1" min="0" max="5" placeholder="0-5" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>ORIENTACIÓN ESPACIAL</strong><br><small>¿País, estado, ciudad, lugar, piso?</small></td><td>5</td>
-          <td><input type="number" id="mm2" min="0" max="5" placeholder="0-5" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm2" min="0" max="5" placeholder="0-5" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>REGISTRO</strong><br><small>Repite: pelota, bandera, árbol</small></td><td>3</td>
-          <td><input type="number" id="mm3" min="0" max="3" placeholder="0-3" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm3" min="0" max="3" placeholder="0-3" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>ATENCIÓN Y CÁLCULO</strong><br><small>Reste de 7 en 7 comenzando en 100 (5 sustracciones)</small></td><td>5</td>
-          <td><input type="number" id="mm4" min="0" max="5" placeholder="0-5" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm4" min="0" max="5" placeholder="0-5" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>MEMORIA DIFERIDA</strong><br><small>Recuerda las 3 palabras anteriores</small></td><td>3</td>
-          <td><input type="number" id="mm5" min="0" max="3" placeholder="0-3" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm5" min="0" max="3" placeholder="0-3" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>NOMINACIÓN</strong><br><small>Nombra: reloj, lápiz</small></td><td>2</td>
-          <td><input type="number" id="mm6" min="0" max="2" placeholder="0-2" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm6" min="0" max="2" placeholder="0-2" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>REPETICIÓN</strong><br><small>"Ni sí, ni no, ni pero"</small></td><td>1</td>
-          <td><input type="number" id="mm7" min="0" max="1" placeholder="0-1" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm7" min="0" max="1" placeholder="0-1" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>COMPRENSIÓN ORAL</strong><br><small>Orden de 3 pasos</small></td><td>3</td>
-          <td><input type="number" id="mm8" min="0" max="3" placeholder="0-3" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm8" min="0" max="3" placeholder="0-3" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>LECTURA</strong><br><small>"Cierre los ojos"</small></td><td>1</td>
-          <td><input type="number" id="mm9" min="0" max="1" placeholder="0-1" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm9" min="0" max="1" placeholder="0-1" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>ESCRITURA</strong><br><small>Escribe una frase</small></td><td>1</td>
-          <td><input type="number" id="mm10" min="0" max="1" placeholder="0-1" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm10" min="0" max="1" placeholder="0-1" style="width:80px" oninput="calcularMMSE()"></td></tr>
         <tr><td><strong>COPIA DE FIGURAS</strong><br><small>Copia pentágonos</small></td><td>1</td>
-          <td><input type="number" id="mm11" min="0" max="1" placeholder="0-1" style="width:80px" onchange="calcularMMSE()"></td></tr>
+          <td><input type="number" id="mm11" min="0" max="1" placeholder="0-1" style="width:80px" oninput="calcularMMSE()"></td></tr>
       </tbody>
     </table>
     <div class="score-box">
       <div>
         <div class="score-label">Puntaje Total MMSE</div>
-        <div style="font-size:11px;color:#777;margin-top:2px">Máximo: 30 puntos</div>
+        <div style="font-size:11px;color:#777;margin-top:2px">Máximo 30. Cada ítem no pasa de su tope. Corte según escolaridad.</div>
       </div>
-      <div class="score-value" id="mmseScore">0</div>
+      <div class="score-value" id="mmseScore">—</div>
       <div class="score-interpretation" id="mmseInterp">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span>🧠</span> MoCA – puntaje total</div>
+    <div class="alert-box alert-info">ℹ️ Solo se anota el total, de 0 a 30. No se copian los ejercicios. Si la escolaridad es de 12 años o menos, se suma 1 punto (sin pasar de 30). Menos de 26: anormal.</div>
+    <div class="field" style="max-width:240px;">
+      <label>Puntaje MoCA obtenido</label>
+      <input type="number" id="moca" min="0" max="30" placeholder="0-30" oninput="calcularMoCA()">
+    </div>
+    <div class="score-box">
+      <div>
+        <div class="score-label">MoCA ajustado</div>
+        <div style="font-size:11px;color:#777;margin-top:2px">+1 si escolaridad ≤12 años · corte &lt;26</div>
+      </div>
+      <div class="score-value" id="mocaScore">—</div>
+      <div class="score-interpretation" id="mocaInterp">—</div>
     </div>
   </div>
 
@@ -1215,7 +1265,7 @@
         <div class="score-label">Puntaje Total GDS-15</div>
         <div style="font-size:11px;color:#777;margin-top:2px">Corte: ≥6 sugiere depresión</div>
       </div>
-      <div class="score-value" id="gdsScore">0</div>
+      <div class="score-value" id="gdsScore">—</div>
       <div class="score-interpretation" id="gdsInterp">—</div>
     </div>
   </div>
@@ -1288,7 +1338,7 @@
         <div class="score-label">Puntaje MNA-SF</div>
         <div style="font-size:11px;color:#777;margin-top:2px">≥12: estado nutricional normal · ≤11: posible desnutrición</div>
       </div>
-      <div class="score-value" id="mnaScore">0</div>
+      <div class="score-value" id="mnaScore">—</div>
       <div class="score-interpretation" id="mnaInterp">—</div>
     </div>
   </div>
@@ -1361,9 +1411,68 @@
         <div class="score-label">Puntaje FRAIL</div>
         <div style="font-size:11px;color:#777;margin-top:2px">0 = Robusto · 1-2 = Pre-frágil · 3-5 = Frágil</div>
       </div>
-      <div class="score-value" id="frailScore">0</div>
+      <div class="score-value" id="frailScore">—</div>
       <div class="score-interpretation" id="frailInterp">—</div>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span>💪</span> SARC-F – Cribado de sarcopenia</div>
+    <div class="alert-box alert-info">ℹ️ SARC-F (EWGSOP2): entrevista directa, 5 ítems de 0 a 2. Total 0-10. ≥4: cribado positivo / riesgo de sarcopenia. Conviene confirmar con fuerza de prensión, SPPB y/o masa muscular.</div>
+    <table class="scale-table">
+      <thead><tr><th style="width:55%">Pregunta</th><th style="width:45%">Respuesta</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>S – Fuerza (Strength)</strong><br><small>¿Qué tanta dificultad tiene para llevar o cargar 4.5 kg?</small></td>
+          <td><div class="radio-group">
+            <label class="radio-option" onclick="selectRadio(this,'sf1',0)"><input type="radio" name="sf1" value="0">Ninguna (0)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf1',1)"><input type="radio" name="sf1" value="1">Alguna (1)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf1',2)"><input type="radio" name="sf1" value="2">Mucha o incapaz (2)</label>
+          </div></td>
+        </tr>
+        <tr>
+          <td><strong>A – Ayuda para caminar (Assistance walking)</strong><br><small>¿Qué tanta dificultad tiene para cruzar caminando un cuarto?</small></td>
+          <td><div class="radio-group">
+            <label class="radio-option" onclick="selectRadio(this,'sf2',0)"><input type="radio" name="sf2" value="0">Ninguna (0)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf2',1)"><input type="radio" name="sf2" value="1">Alguna (1)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf2',2)"><input type="radio" name="sf2" value="2">Mucha, usa auxiliares o incapaz (2)</label>
+          </div></td>
+        </tr>
+        <tr>
+          <td><strong>R – Levantarse de la silla (Rise from chair)</strong><br><small>¿Qué tanta dificultad tiene para levantarse de una silla o de la cama?</small></td>
+          <td><div class="radio-group">
+            <label class="radio-option" onclick="selectRadio(this,'sf3',0)"><input type="radio" name="sf3" value="0">Ninguna (0)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf3',1)"><input type="radio" name="sf3" value="1">Alguna (1)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf3',2)"><input type="radio" name="sf3" value="2">Mucha o incapaz sin ayuda (2)</label>
+          </div></td>
+        </tr>
+        <tr>
+          <td><strong>C – Subir escaleras (Climb stairs)</strong><br><small>¿Qué tanta dificultad tiene para subir 10 escalones?</small></td>
+          <td><div class="radio-group">
+            <label class="radio-option" onclick="selectRadio(this,'sf4',0)"><input type="radio" name="sf4" value="0">Ninguna (0)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf4',1)"><input type="radio" name="sf4" value="1">Alguna (1)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf4',2)"><input type="radio" name="sf4" value="2">Mucha o incapaz (2)</label>
+          </div></td>
+        </tr>
+        <tr>
+          <td><strong>F – Caídas (Falls)</strong><br><small>¿Cuántas veces se ha caído en el último año?</small></td>
+          <td><div class="radio-group">
+            <label class="radio-option" onclick="selectRadio(this,'sf5',0)"><input type="radio" name="sf5" value="0">Ninguna (0)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf5',1)"><input type="radio" name="sf5" value="1">1 a 3 caídas (1)</label>
+            <label class="radio-option" onclick="selectRadio(this,'sf5',2)"><input type="radio" name="sf5" value="2">4 o más caídas (2)</label>
+          </div></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="score-box">
+      <div>
+        <div class="score-label">Puntaje SARC-F</div>
+        <div style="font-size:11px;color:#777;margin-top:2px">0-3 = cribado negativo · ≥4 = riesgo de sarcopenia (confirmar con prensión, SPPB o masa muscular)</div>
+      </div>
+      <div class="score-value" id="sarcScore">—</div>
+      <div class="score-interpretation" id="sarcInterp">—</div>
+    </div>
+    <div id="sarcopeniaProb" style="font-size:13px;margin-top:8px;color:#1a1a2e;">Sarcopenia probable: No evaluado</div>
   </div>
 
   <div class="card">
@@ -1491,11 +1600,13 @@ let seccionActual = 0;
 const totalSecciones = 7;
 
 function irSeccion(n) {
+  document.querySelectorAll('.section').forEach(s => s.style.display = '');
   document.getElementById('sec' + seccionActual).classList.remove('active');
   seccionActual = n;
   document.getElementById('sec' + n).classList.add('active');
   actualizarProgress();
   if (n === 6) generarResumen();
+  autoResizeAll();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1537,9 +1648,11 @@ function calcularIMC() {
   const peso = parseFloat(document.getElementById('peso').value);
   const talla = parseFloat(document.getElementById('talla').value);
   if (peso && talla && talla > 0) {
-    const imc = (peso / (talla * talla)).toFixed(1);
-    document.getElementById('imc').value = imc;
+    document.getElementById('imc').value = (peso / (talla * talla)).toFixed(1);
+  } else {
+    document.getElementById('imc').value = '';
   }
+  calcularFisico();
 }
 
 // CALCULAR EDAD
@@ -1559,90 +1672,251 @@ function calcularScores() {
   calcularBarthel();
   calcularLawton();
   calcularMMSE();
+  calcularMoCA();
   calcularGDS();
   calcularMNA();
   calcularFRAIL();
+  calcularSARC();
+  calcularFisico();
 }
 
-function sumarRadios(nombres) {
+function estadoRadios(nombres) {
   let total = 0;
-  nombres.forEach(n => {
-    const sel = document.querySelector(`input[name="${n}"]:checked`);
-    if (sel) total += parseInt(sel.value);
+  let contestados = 0;
+  nombres.forEach(name => {
+    const sel = document.querySelector(`input[name="${name}"]:checked`);
+    if (!sel || sel.value === '') return;
+    contestados++;
+    total += parseInt(sel.value, 10) || 0;
   });
-  return total;
+  return {
+    total,
+    contestados,
+    vacio: contestados === 0,
+    completo: contestados === nombres.length
+  };
+}
+
+function marcarEscala(scoreId, interpId, estado, interpretar) {
+  const scoreEl = document.getElementById(scoreId);
+  const interpEl = document.getElementById(interpId);
+  if (estado.vacio) {
+    scoreEl.textContent = '—';
+    interpEl.textContent = 'No evaluado';
+    interpEl.className = 'score-interpretation interp-neutro';
+    return;
+  }
+  if (!estado.completo) {
+    scoreEl.textContent = String(estado.total);
+    interpEl.textContent = 'Incompleto';
+    interpEl.className = 'score-interpretation interp-neutro';
+    return;
+  }
+  scoreEl.textContent = String(estado.total);
+  interpretar(estado.total, interpEl);
+}
+
+function sinAlerta(texto) {
+  return !texto || texto === 'No evaluado' || texto === 'Incompleto' || texto.includes('Falta');
 }
 
 function calcularBarthel() {
-  const t = sumarRadios(['b1','b2','b3','b4','b5','b6','b7','b8','b9','b10']);
-  document.getElementById('barthelScore').textContent = t;
-  const el = document.getElementById('barthelInterp');
-  if (t === 100) { el.textContent = 'Independiente'; el.className = 'score-interpretation interp-normal'; }
-  else if (t >= 60) { el.textContent = 'Dep. leve'; el.className = 'score-interpretation interp-leve'; }
-  else if (t >= 40) { el.textContent = 'Dep. moderada'; el.className = 'score-interpretation interp-moderado'; }
-  else if (t >= 20) { el.textContent = 'Dep. grave'; el.className = 'score-interpretation interp-severo'; }
-  else { el.textContent = 'Dep. total'; el.className = 'score-interpretation interp-severo'; }
+  marcarEscala('barthelScore', 'barthelInterp', estadoRadios(['b1','b2','b3','b4','b5','b6','b7','b8','b9','b10']), (t, el) => {
+    if (t === 100) { el.textContent = 'Independiente'; el.className = 'score-interpretation interp-normal'; }
+    else if (t >= 91) { el.textContent = 'Dep. leve'; el.className = 'score-interpretation interp-leve'; }
+    else if (t >= 61) { el.textContent = 'Dep. moderada'; el.className = 'score-interpretation interp-moderado'; }
+    else if (t >= 21) { el.textContent = 'Dep. severa'; el.className = 'score-interpretation interp-severo'; }
+    else { el.textContent = 'Dep. total'; el.className = 'score-interpretation interp-severo'; }
+  });
 }
 
 function calcularLawton() {
-  const t = sumarRadios(['l1','l2','l3','l4','l5','l6','l7','l8']);
-  document.getElementById('lawtonScore').textContent = t;
-  const el = document.getElementById('lawtonInterp');
-  if (t >= 7) { el.textContent = 'Independiente'; el.className = 'score-interpretation interp-normal'; }
-  else if (t >= 5) { el.textContent = 'Dep. leve'; el.className = 'score-interpretation interp-leve'; }
-  else if (t >= 3) { el.textContent = 'Dep. moderada'; el.className = 'score-interpretation interp-moderado'; }
-  else { el.textContent = 'Dep. severa'; el.className = 'score-interpretation interp-severo'; }
+  marcarEscala('lawtonScore', 'lawtonInterp', estadoRadios(['l1','l2','l3','l4','l5','l6','l7','l8']), (t, el) => {
+    if (t >= 7) { el.textContent = 'Independiente'; el.className = 'score-interpretation interp-normal'; }
+    else if (t >= 5) { el.textContent = 'Dep. leve'; el.className = 'score-interpretation interp-leve'; }
+    else if (t >= 3) { el.textContent = 'Dep. moderada'; el.className = 'score-interpretation interp-moderado'; }
+    else { el.textContent = 'Dep. severa'; el.className = 'score-interpretation interp-severo'; }
+  });
+}
+
+const MMSE_TOPES = { mm1:5, mm2:5, mm3:3, mm4:5, mm5:3, mm6:2, mm7:1, mm8:3, mm9:1, mm10:1, mm11:1 };
+
+function leerEnteroAcotado(id, max) {
+  const el = document.getElementById(id);
+  if (!el || el.value.trim() === '') return null;
+  let v = parseInt(el.value, 10);
+  if (isNaN(v)) return null;
+  if (v < 0) v = 0;
+  if (v > max) v = max;
+  el.value = String(v);
+  return v;
+}
+
+function corteMMSE() {
+  const esc = document.getElementById('escolaridad').value;
+  if (esc === 'Analfabeta') return 17;
+  if (esc === 'Primaria incompleta' || esc === 'Primaria completa') return 21;
+  if (esc === 'Secundaria' || esc === 'Preparatoria' || esc === 'Licenciatura o más') return 24;
+  return null;
 }
 
 function calcularMMSE() {
-  const t = sumarRadios(['mm1','mm2','mm3','mm4','mm5','mm6','mm7','mm8','mm9','mm10','mm11'].filter(id => {
-    return document.getElementById(id) !== null;
-  }));
-  let total = 0;
-  ['mm1','mm2','mm3','mm4','mm5','mm6','mm7','mm8','mm9','mm10','mm11'].forEach(id => {
-    const v = parseInt(document.getElementById(id).value) || 0;
-    total += v;
-  });
-  document.getElementById('mmseScore').textContent = total;
+  const ids = Object.keys(MMSE_TOPES);
+  const valores = ids.map(id => leerEnteroAcotado(id, MMSE_TOPES[id]));
+  const llenos = valores.filter(v => v !== null);
+  const scoreEl = document.getElementById('mmseScore');
   const el = document.getElementById('mmseInterp');
-  if (total >= 27) { el.textContent = 'Normal'; el.className = 'score-interpretation interp-normal'; }
-  else if (total >= 24) { el.textContent = 'Posible deterioro'; el.className = 'score-interpretation interp-leve'; }
-  else if (total >= 18) { el.textContent = 'Deterioro leve'; el.className = 'score-interpretation interp-moderado'; }
-  else if (total >= 10) { el.textContent = 'Deterioro moderado'; el.className = 'score-interpretation interp-severo'; }
-  else { el.textContent = 'Deterioro grave'; el.className = 'score-interpretation interp-severo'; }
+  if (llenos.length === 0) {
+    scoreEl.textContent = '—';
+    el.textContent = 'No evaluado';
+    el.className = 'score-interpretation interp-neutro';
+    return;
+  }
+  let total = llenos.reduce((a, b) => a + b, 0);
+  if (total > 30) total = 30;
+  scoreEl.textContent = String(total);
+  if (llenos.length < ids.length) {
+    el.textContent = 'Incompleto';
+    el.className = 'score-interpretation interp-neutro';
+    return;
+  }
+  const corte = corteMMSE();
+  if (corte === null) {
+    el.textContent = 'Falta escolaridad';
+    el.className = 'score-interpretation interp-neutro';
+    return;
+  }
+  if (total >= corte) { el.textContent = 'Normal'; el.className = 'score-interpretation interp-normal'; }
+  else { el.textContent = 'Bajo el corte'; el.className = 'score-interpretation interp-moderado'; }
+}
+
+function escolaridadDoceOMenos() {
+  const esc = document.getElementById('escolaridad').value;
+  if (!esc) return null;
+  return esc !== 'Licenciatura o más';
+}
+
+function calcularMoCA() {
+  const raw = leerEnteroAcotado('moca', 30);
+  const scoreEl = document.getElementById('mocaScore');
+  const el = document.getElementById('mocaInterp');
+  if (raw === null) {
+    scoreEl.textContent = '—';
+    el.textContent = 'No evaluado';
+    el.className = 'score-interpretation interp-neutro';
+    return;
+  }
+  const suma = escolaridadDoceOMenos();
+  if (suma === null) {
+    scoreEl.textContent = String(raw);
+    el.textContent = 'Falta escolaridad';
+    el.className = 'score-interpretation interp-neutro';
+    return;
+  }
+  const ajustado = Math.min(30, raw + (suma ? 1 : 0));
+  scoreEl.textContent = String(ajustado);
+  if (ajustado < 26) { el.textContent = 'Anormal'; el.className = 'score-interpretation interp-severo'; }
+  else { el.textContent = suma ? 'Normal (+1)' : 'Normal'; el.className = 'score-interpretation interp-normal'; }
 }
 
 function calcularGDS() {
-  const t = sumarRadios(['g1','g2','g3','g4','g5','g6','g7','g8','g9','g10','g11','g12','g13','g14','g15']);
-  document.getElementById('gdsScore').textContent = t;
-  const el = document.getElementById('gdsInterp');
-  if (t <= 5) { el.textContent = 'Normal'; el.className = 'score-interpretation interp-normal'; }
-  else if (t <= 10) { el.textContent = 'Dep. probable'; el.className = 'score-interpretation interp-moderado'; }
-  else { el.textContent = 'Dep. establecida'; el.className = 'score-interpretation interp-severo'; }
+  marcarEscala('gdsScore', 'gdsInterp', estadoRadios(['g1','g2','g3','g4','g5','g6','g7','g8','g9','g10','g11','g12','g13','g14','g15']), (t, el) => {
+    if (t <= 5) { el.textContent = 'Normal'; el.className = 'score-interpretation interp-normal'; }
+    else if (t <= 10) { el.textContent = 'Dep. probable'; el.className = 'score-interpretation interp-moderado'; }
+    else { el.textContent = 'Dep. establecida'; el.className = 'score-interpretation interp-severo'; }
+  });
 }
 
-
-
 function calcularMNA() {
-  const t = sumarRadios(['mna1','mna2','mna3','mna4','mna5','mna6']);
-  document.getElementById('mnaScore').textContent = t;
-  const el = document.getElementById('mnaInterp');
-  if (t >= 12) { el.textContent = 'Estado normal'; el.className = 'score-interpretation interp-normal'; }
-  else if (t >= 8) { el.textContent = 'Riesgo nutricional'; el.className = 'score-interpretation interp-moderado'; }
-  else { el.textContent = 'Desnutrición'; el.className = 'score-interpretation interp-severo'; }
+  marcarEscala('mnaScore', 'mnaInterp', estadoRadios(['mna1','mna2','mna3','mna4','mna5','mna6']), (t, el) => {
+    if (t >= 12) { el.textContent = 'Estado normal'; el.className = 'score-interpretation interp-normal'; }
+    else if (t >= 8) { el.textContent = 'Riesgo nutricional'; el.className = 'score-interpretation interp-moderado'; }
+    else { el.textContent = 'Desnutrición'; el.className = 'score-interpretation interp-severo'; }
+  });
 }
 
 function calcularFRAIL() {
-  const t = sumarRadios(['fr1','fr2','fr3','fr4','fr5']);
-  document.getElementById('frailScore').textContent = t;
-  const el = document.getElementById('frailInterp');
-  if (t === 0) { el.textContent = 'Robusto'; el.className = 'score-interpretation interp-normal'; }
-  else if (t <= 2) { el.textContent = 'Pre-frágil'; el.className = 'score-interpretation interp-leve'; }
-  else { el.textContent = 'Frágil'; el.className = 'score-interpretation interp-severo'; }
+  marcarEscala('frailScore', 'frailInterp', estadoRadios(['fr1','fr2','fr3','fr4','fr5']), (t, el) => {
+    if (t === 0) { el.textContent = 'Robusto'; el.className = 'score-interpretation interp-normal'; }
+    else if (t <= 2) { el.textContent = 'Pre-frágil'; el.className = 'score-interpretation interp-leve'; }
+    else { el.textContent = 'Frágil'; el.className = 'score-interpretation interp-severo'; }
+  });
+}
+
+function calcularSARC() {
+  marcarEscala('sarcScore', 'sarcInterp', estadoRadios(['sf1','sf2','sf3','sf4','sf5']), (t, el) => {
+    if (t >= 4) { el.textContent = 'Riesgo de sarcopenia'; el.className = 'score-interpretation interp-severo'; }
+    else { el.textContent = 'Cribado negativo'; el.className = 'score-interpretation interp-normal'; }
+  });
+  concluirSarcopenia();
+}
+
+function numeroCampo(id) {
+  const el = document.getElementById(id);
+  if (!el || el.value.trim() === '') return null;
+  const n = parseFloat(el.value);
+  return isNaN(n) ? null : n;
+}
+
+function ponerLectura(id, texto) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = texto;
+}
+
+function prensionBaja() {
+  const kg = numeroCampo('prension');
+  const sexo = document.getElementById('sexo').value;
+  if (kg === null || (sexo !== 'Masculino' && sexo !== 'Femenino')) return null;
+  return sexo === 'Masculino' ? kg < 27 : kg < 16;
+}
+
+function concluirSarcopenia() {
+  const el = document.getElementById('sarcopeniaProb');
+  if (!el) return;
+  const sarcI = document.getElementById('sarcInterp').textContent;
+  const baja = prensionBaja();
+  if (sinAlerta(sarcI) || baja === null) {
+    el.textContent = 'Sarcopenia probable: No evaluado';
+    return;
+  }
+  el.textContent = (sarcI === 'Riesgo de sarcopenia' && baja)
+    ? 'Sarcopenia probable: Sí'
+    : 'Sarcopenia probable: No';
+}
+
+function calcularFisico() {
+  const v = numeroCampo('velMarcha');
+  if (v === null) ponerLectura('marchaLectura', 'No evaluado');
+  else if (v <= 0.8) ponerLectura('marchaLectura', 'Lenta');
+  else if (v <= 1) ponerLectura('marchaLectura', 'Reducida');
+  else ponerLectura('marchaLectura', 'Normal');
+
+  const tug = numeroCampo('tug');
+  if (tug === null) ponerLectura('tugLectura', 'No evaluado');
+  else if (tug > 20) ponerLectura('tugLectura', 'Dependencia marcada');
+  else if (tug >= 12) ponerLectura('tugLectura', 'Riesgo de caídas');
+  else ponerLectura('tugLectura', 'Normal');
+
+  const kg = numeroCampo('prension');
+  const sexo = document.getElementById('sexo').value;
+  if (kg === null) ponerLectura('prensionLectura', 'No evaluado');
+  else if (sexo !== 'Masculino' && sexo !== 'Femenino') ponerLectura('prensionLectura', 'Falta sexo');
+  else ponerLectura('prensionLectura', prensionBaja() ? 'Baja' : 'Normal');
+
+  const cc = numeroCampo('pantorrilla');
+  const imc = numeroCampo('imc');
+  let pant = 'No evaluado';
+  if (cc !== null) {
+    pant = cc < 31 ? 'Baja masa muscular' : 'Normal';
+    if (imc !== null && imc >= 25) pant += '. IMC alto: 31 cm puede quedarse corto';
+  }
+  ponerLectura('pantorrillaLectura', pant);
+  concluirSarcopenia();
 }
 
 // RESUMEN FINAL
 function generarResumen() {
+  calcularScores();
   const nombre     = document.getElementById('nombre').value || '—';
   const edad       = document.getElementById('edad').value || '—';
   const sexo       = document.getElementById('sexo').value || '—';
@@ -1668,13 +1942,32 @@ function generarResumen() {
   const mnaI     = document.getElementById('mnaInterp').textContent;
   const frail    = document.getElementById('frailScore').textContent;
   const frailI   = document.getElementById('frailInterp').textContent;
+  const sarc     = document.getElementById('sarcScore').textContent;
+  const sarcI    = document.getElementById('sarcInterp').textContent;
+  const moca     = document.getElementById('mocaScore').textContent;
+  const mocaI    = document.getElementById('mocaInterp').textContent;
+  const marchaI  = document.getElementById('marchaLectura').textContent;
+  const tugI     = document.getElementById('tugLectura').textContent;
+  const prenI    = document.getElementById('prensionLectura').textContent;
+  const pantI    = document.getElementById('pantorrillaLectura').textContent.startsWith('Baja')
+    ? 'Baja masa muscular'
+    : (document.getElementById('pantorrillaLectura').textContent.startsWith('Normal') ? 'Normal' : document.getElementById('pantorrillaLectura').textContent);
+  const sarcProb = document.getElementById('sarcopeniaProb').textContent.replace('Sarcopenia probable: ', '');
 
   function badgeClass(text) {
-    if (text.includes('Normal') || text.includes('Independiente') || text.includes('Robusto') || text.includes('normal')) return 'badge-green';
-    if (text.includes('leve') || text.includes('posible') || text.includes('Pre') || text.includes('Bajo') || text.includes('medio')) return 'badge-yellow';
+    if (text.includes('No evaluado') || text.includes('Incompleto') || text.includes('Falta')) return 'badge-neutral';
+    if (text.includes('sarcopenia') || text === 'Sí') return 'badge-red';
+    if (text.includes('Normal') || text.includes('Independiente') || text.includes('Robusto') || text.includes('normal') || text.includes('negativo') || text === 'No') return 'badge-green';
+    if (text.includes('leve') || text.includes('posible') || text.includes('Pre') || text.includes('Bajo') || text.includes('medio') || text.includes('Reducida')) return 'badge-yellow';
     if (text.includes('moderada') || text.includes('probable') || text.includes('Riesgo') || text.includes('nutricional')) return 'badge-orange';
     return 'badge-red';
   }
+
+  const conTope = (puntos, tope) => puntos === '—' ? '—' : puntos + '/' + tope;
+  const medida = (id) => {
+    const v = document.getElementById(id).value.trim();
+    return v === '' ? '—' : v;
+  };
 
   const scoreRow = (label, score, interp) =>
     `<div class="summary-row">
@@ -1685,49 +1978,64 @@ function generarResumen() {
   document.getElementById('summaryContent').innerHTML = `
     <div class="summary-card">
       <h3>🦿 Funcional</h3>
-      ${scoreRow('Barthel (ABVD)', barthel + '/100', barthelI)}
-      ${scoreRow('Lawton (AIVD)', lawton + '/8', lawtonI)}
-      <div class="summary-row"><span class="s-label">Velocidad marcha</span><span class="s-value">${document.getElementById('velMarcha').value || '—'} m/s</span></div>
-      <div class="summary-row"><span class="s-label">TUG</span><span class="s-value">${document.getElementById('tug').value || '—'} seg</span></div>
-      <div class="summary-row"><span class="s-label">Fuerza prensión</span><span class="s-value">${document.getElementById('prension').value || '—'} kg</span></div>
+      ${scoreRow('Barthel (ABVD)', conTope(barthel, 100), barthelI)}
+      ${scoreRow('Lawton (AIVD)', conTope(lawton, 8), lawtonI)}
+      ${scoreRow('Velocidad marcha', medida('velMarcha') + ' m/s', marchaI)}
+      ${scoreRow('TUG', medida('tug') + ' seg', tugI)}
+      ${scoreRow('Fuerza prensión', medida('prension') + ' kg', prenI)}
     </div>
     <div class="summary-card">
       <h3>🧠 Cognitivo / Afectivo</h3>
-      ${scoreRow('MMSE', mmse + '/30', mmseI)}
-      ${scoreRow('GDS-15 (depresión)', gds + '/15', gdsI)}
+      ${scoreRow('MMSE', conTope(mmse, 30), mmseI)}
+      ${scoreRow('MoCA ajustado', conTope(moca, 30), mocaI)}
+      ${scoreRow('GDS-15 (depresión)', conTope(gds, 15), gdsI)}
       <div class="summary-row"><span class="s-label">Inicio del deterioro</span><span class="s-value">${document.getElementById('inicioDet').value || '—'}</span></div>
       <div class="summary-row"><span class="s-label">Patrón</span><span class="s-value">${document.getElementById('patronDet').value || '—'}</span></div>
     </div>
     <div class="summary-card">
       <h3>🥗 Nutricional</h3>
-      ${scoreRow('MNA-SF', mna + '/14', mnaI)}
+      ${scoreRow('MNA-SF', conTope(mna, 14), mnaI)}
       <div class="summary-row"><span class="s-label">IMC</span><span class="s-value">${document.getElementById('imc').value || '—'} kg/m²</span></div>
-      <div class="summary-row"><span class="s-label">Perímetro pantorrilla</span><span class="s-value">${document.getElementById('pantorrilla').value || '—'} cm</span></div>
+      ${scoreRow('Perímetro pantorrilla', medida('pantorrilla') + ' cm', pantI)}
       <div class="summary-row"><span class="s-label">Peso</span><span class="s-value">${document.getElementById('peso').value || '—'} kg</span></div>
     </div>
     <div class="summary-card">
-      <h3>🧩 Fragilidad / Fármacos</h3>
-      ${scoreRow('Escala FRAIL', frail + '/5', frailI)}
+      <h3>🧩 Fragilidad / Sarcopenia</h3>
+      ${scoreRow('Escala FRAIL', conTope(frail, 5), frailI)}
+      ${scoreRow('SARC-F', conTope(sarc, 10), sarcI)}
+      ${scoreRow('Sarcopenia probable', 'EWGSOP2', sarcProb)}
       <div class="summary-row"><span class="s-label">Medicamentos activos</span><span class="s-value">${document.getElementById('numMeds').value || '—'}</span></div>
       <div class="summary-row"><span class="s-label">Comorbilidades</span><span class="s-value">${document.querySelectorAll('#comorbilidades .check-item.checked').length} activas</span></div>
       <div class="summary-row"><span class="s-label">Próxima valoración</span><span class="s-value">${document.getElementById('proxVal').value || '—'}</span></div>
     </div>`;
 
-  // Impresión clínica automática
+  // Impresión clínica automática: lo no contestado no entra
   const alertas = [];
-  if (parseInt(barthel) < 60) alertas.push('dependencia funcional significativa');
-  if (parseInt(mmse) < 24)    alertas.push('deterioro cognitivo');
-  if (parseInt(gds) >= 6)     alertas.push('depresión probable');
-  if (parseInt(mna) < 8)      alertas.push('desnutrición');
-  if (parseInt(frail) >= 3)   alertas.push('fragilidad establecida (FRAIL)');
-  if (parseInt(document.getElementById('numMeds').value) >= 5) alertas.push('polifarmacia');
+  if (!sinAlerta(barthelI) && parseInt(barthel, 10) <= 60) alertas.push('dependencia funcional significativa (Barthel)');
+  if (mmseI === 'Bajo el corte') alertas.push('MMSE bajo el corte para su escolaridad');
+  if (mocaI === 'Anormal') alertas.push('MoCA anormal');
+  if (!sinAlerta(gdsI) && parseInt(gds, 10) >= 6) alertas.push('depresión probable');
+  if (!sinAlerta(mnaI) && parseInt(mna, 10) < 8) alertas.push('desnutrición');
+  if (!sinAlerta(frailI) && parseInt(frail, 10) >= 3) alertas.push('fragilidad establecida (FRAIL)');
+  if (sarcProb === 'Sí') alertas.push('sarcopenia probable (SARC-F ≥4 y prensión baja)');
+  else if (sarcI === 'Riesgo de sarcopenia') alertas.push('riesgo de sarcopenia (SARC-F ≥4; confirmar con fuerza de prensión, SPPB o masa muscular)');
+  if (marchaI === 'Lenta') alertas.push('marcha lenta (≤0.8 m/s)');
+  else if (marchaI === 'Reducida') alertas.push('marcha reducida (≤1.0 m/s)');
+  if (tugI === 'Riesgo de caídas' || tugI === 'Dependencia marcada') alertas.push('TUG alterado');
+  if (prenI === 'Baja' && sarcProb !== 'Sí') alertas.push('fuerza de prensión baja');
+  if (pantI.startsWith('Baja masa')) alertas.push('pantorrilla <31 cm (baja masa muscular; si el IMC es alto, confirmar)');
+  if (parseInt(document.getElementById('numMeds').value, 10) >= 5) alertas.push('polifarmacia');
 
   const planTxt = document.getElementById('planManejo').value;
   const diagTxt = document.getElementById('diagnosticos').value;
 
+  const algunaEvaluada = [barthelI, lawtonI, mmseI, mocaI, gdsI, mnaI, frailI, sarcI, marchaI, tugI, prenI, pantI]
+    .some(t => !sinAlerta(t));
   let impresion = alertas.length > 0
     ? `<strong>Áreas de intervención prioritaria identificadas:</strong> ${alertas.join(', ')}. Se recomienda plan de atención multidisciplinaria enfocado en los dominios alterados.`
-    : `Valoración sin alertas mayores en los dominios evaluados. Continuar seguimiento periódico y refuerzo preventivo.`;
+    : (algunaEvaluada
+      ? `Valoración sin alertas mayores en los dominios evaluados. Continuar seguimiento periódico y refuerzo preventivo.`
+      : `No hay escalas completas para interpretar. Lo que está en blanco figura como «No evaluado» y no se toma como normal.`);
 
   if (diagTxt) impresion += `<br><br><strong>Diagnósticos:</strong><br>${diagTxt.replace(/\n/g,'<br>')}`;
   if (planTxt) impresion += `<br><br><strong>Plan de manejo:</strong><br>${planTxt.replace(/\n/g,'<br>')}`;
@@ -1735,18 +2043,25 @@ function generarResumen() {
   document.getElementById('impresionClinica').innerHTML = impresion;
 }
 
-function imprimirVGI() {
-  // Mostrar todas las secciones para imprimir
+function prepararParaSalida() {
   document.querySelectorAll('.section').forEach(s => s.style.display = 'block');
   generarResumen();
-  setTimeout(() => {
-    window.print();
-    // Restaurar vista normal
-    setTimeout(() => {
-      document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
-      document.getElementById('sec' + seccionActual).style.display = 'block';
-    }, 500);
-  }, 300);
+  document.body.classList.add('exportando');
+  autoResizeAll();
+}
+
+function restaurarVista() {
+  document.body.classList.remove('exportando');
+  document.querySelectorAll('.section').forEach(s => {
+    s.style.display = '';
+    s.classList.toggle('active', s.id === 'sec' + seccionActual);
+  });
+  autoResizeAll();
+}
+
+function imprimirVGI() {
+  prepararParaSalida();
+  setTimeout(() => window.print(), 300);
 }
 
 function guardarPDF() {
@@ -1754,27 +2069,25 @@ function guardarPDF() {
   const fecha  = document.getElementById('fechaVal').value || new Date().toISOString().split('T')[0];
   const nombreArchivo = `VGI_${nombre.replace(/[^a-zA-Z0-9]/g,'_')}_${fecha}.pdf`;
 
-  // Mostrar todas las secciones
-  document.querySelectorAll('.section').forEach(s => s.style.display = 'block');
-  generarResumen();
-
   const botones = document.querySelectorAll('.nav-buttons, .header-right, .progress-bar-container');
+  prepararParaSalida();
   botones.forEach(b => b.style.display = 'none');
 
   const opt = {
-    margin:       [10, 10, 10, 10],
+    margin:       [10, 10, 12, 10],
     filename:     nombreArchivo,
     image:        { type: 'jpeg', quality: 0.97 },
     html2canvas:  { scale: 2, useCORS: true, logging: false },
     jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+    pagebreak:    { mode: ['css', 'legacy'], avoid: ['.score-box', '.scale-table tr', '.summary-card', '.alert-box', '.header'] }
   };
 
-  html2pdf().set(opt).from(document.body).save().then(() => {
-    // Restaurar vista
-    document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
-    document.getElementById('sec' + seccionActual).style.display = 'block';
+  html2pdf().set(opt).from(document.body).save().then(function () {
     botones.forEach(b => b.style.display = '');
+    restaurarVista();
+  }, function () {
+    botones.forEach(b => b.style.display = '');
+    restaurarVista();
   });
 }
 
@@ -1784,15 +2097,43 @@ function limpiarFormulario() {
     document.querySelectorAll('.radio-option.selected').forEach(el => { el.classList.remove('selected'); el.querySelector('input').checked = false; });
     document.querySelectorAll('.check-item.checked').forEach(el => el.classList.remove('checked'));
     calcularScores();
+    autoResizeAll();
     irSeccion(0);
   }
 }
+
+function autoResize(el) {
+  if (!el || el.tagName !== 'TEXTAREA') return;
+  if (el.offsetParent === null) return;
+  el.style.overflow = 'hidden';
+  el.style.height = '0px';
+  const cs = window.getComputedStyle(el);
+  let extra = 0;
+  if (cs.boxSizing === 'border-box') {
+    extra = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+  }
+  let h = el.scrollHeight + extra + 4;
+  const min = parseFloat(cs.minHeight) || 0;
+  if (h < min) h = min;
+  el.style.height = h + 'px';
+}
+
+function autoResizeAll() {
+  document.querySelectorAll('textarea').forEach(autoResize);
+}
+
+window.addEventListener('beforeprint', prepararParaSalida);
+window.addEventListener('afterprint', restaurarVista);
+document.addEventListener('input', function (e) {
+  if (e.target && e.target.tagName === 'TEXTAREA') autoResize(e.target);
+});
 
 // Fecha hoy por defecto
 document.addEventListener('DOMContentLoaded', () => {
   const hoy = new Date().toISOString().split('T')[0];
   if (document.getElementById('fechaVal')) document.getElementById('fechaVal').value = hoy;
   calcularScores();
+  autoResizeAll();
 
   // Registrar Service Worker (PWA)
   if ('serviceWorker' in navigator) {
